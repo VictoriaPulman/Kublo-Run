@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <!-- Запрещаем пользовательский зум: во время прыжка случайное приближение страницы мешает игре -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#c89650">
+  <title>Kublo Run — Бегущий Кубло</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="game-shell">
+    <!-- Верхняя панель: только кнопка звука, весь остальной интерфейс рисуется на Canvas -->
+    <header class="topbar">
+      <span class="topbar__title">KUBLO RUN · АРХЕОЛОГИЧЕСКИЙ ЗАБЕГ</span>
+      <button id="soundToggle" class="sound-btn" type="button" aria-label="Включить или выключить звук">🔊</button>
+    </header>
+
+    <div id="gameWrap" class="game-wrap">
+      <!-- Игровое поле целиком отрисовывается средствами HTML5 Canvas -->
+      <canvas id="game" aria-label="Игра Kublo Run: бесконечный раннер с археологом Кубло"></canvas>
+
+      <!-- Полупрозрачные экранные кнопки для сенсорных устройств -->
+      <div class="touch-controls" aria-hidden="false">
+        <button id="btnJump" class="touch-btn touch-btn--jump" type="button">
+          <span class="touch-btn__icon">⬆️</span><span class="touch-btn__label">Прыжок</span>
+        </button>
+        <button id="btnDuck" class="touch-btn touch-btn--duck" type="button">
+          <span class="touch-btn__icon">⬇️</span><span class="touch-btn__label">Пригнуться</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Подсказка появляется только если не найдены оба файла с лицом героя -->
+    <p id="assetHint" class="hint" hidden>Положите файлы kublo1.png и kublo2.png в папку с игрой для анимации лица</p>
+
+    <p class="help">
+      <strong>ПК:</strong> Пробел / ↑ / W — старт и прыжок (зажмите дольше — прыжок выше) · ↓ / S — пригнуться<br>
+      <strong>Телефон:</strong> тап слева — прыжок · удержание справа или свайп вниз — пригнуться
+    </p>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

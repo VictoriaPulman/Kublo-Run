@@ -1,0 +1,170 @@
+/* ============================================================
+   Kublo Run — оформление страницы.
+   Вся графика игры рисуется на Canvas, поэтому CSS занимается
+   только адаптивной раскладкой, кнопками и запретом «случайных»
+   жестов браузера (выделение текста, контекстное меню, зум).
+   ============================================================ */
+
+:root {
+  --sand: #c89650;
+  --ink: #2e2115;
+  --panel: rgba(255, 244, 215, 0.94);
+}
+
+* {
+  box-sizing: border-box;
+  /* Запрещаем выделение текста и системное меню по долгому нажатию */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  overflow-x: hidden; /* никакой горизонтальной прокрутки */
+}
+
+body {
+  font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  color: #f7e6c4;
+  background:
+    radial-gradient(circle at 50% -10%, #6d5437 0%, #3b2d20 55%, #211a14 100%);
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  touch-action: manipulation; /* убираем двойной тап-зум и задержку клика */
+}
+
+.game-shell {
+  width: min(100%, 1000px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.topbar__title {
+  font-size: clamp(11px, 2.2vw, 15px);
+  letter-spacing: 0.14em;
+  font-weight: 800;
+  color: #e8c98f;
+  text-shadow: 0 2px 0 #211a14;
+}
+
+.sound-btn {
+  flex: none;
+  width: 42px;
+  height: 38px;
+  border-radius: 10px;
+  border: 2px solid #8a6537;
+  background: rgba(255, 240, 205, 0.12);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.sound-btn:hover { background: rgba(255, 240, 205, 0.24); }
+.sound-btn:active { transform: scale(0.93); }
+
+.game-wrap {
+  position: relative;
+  width: 100%;
+  border: 3px solid #8a6537;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #74c9f4;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45), inset 0 0 0 2px rgba(255, 255, 255, 0.15);
+}
+
+#game {
+  display: block;
+  width: 100%;
+  /* Соотношение сторон «широкого» поля; на телефонах заменяется на более высокое */
+  aspect-ratio: 1000 / 420;
+  height: auto;
+  /* Жесты обрабатываются самой игрой, браузерные — отключены */
+  touch-action: none;
+}
+
+/* На узких экранах поле становится выше — герой и препятствия остаются хорошо видимыми */
+@media (max-width: 700px) {
+  #game { aspect-ratio: 4 / 3; }
+  .game-shell { gap: 7px; }
+  body { padding: 7px; }
+}
+
+/* Кнопки появляются на сенсорных устройствах и на узких экранах */
+.touch-controls {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 12px 12px;
+  justify-content: space-between;
+  pointer-events: none; /* кликают только сами кнопки */
+}
+
+@media (hover: none), (pointer: coarse), (max-width: 700px) {
+  .touch-controls { display: flex; }
+}
+
+.touch-btn {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 23vw;
+  min-width: 78px;
+  max-width: 130px;
+  height: 58px;
+  border-radius: 14px;
+  border: 2px solid rgba(255, 245, 215, 0.65);
+  background: rgba(46, 33, 21, 0.46);
+  color: #fff6df;
+  font-family: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  backdrop-filter: blur(2px);
+  transition: transform 0.08s ease, background 0.08s ease;
+}
+
+.touch-btn:active,
+.touch-btn.is-pressed {
+  transform: scale(0.94);
+  background: rgba(138, 101, 55, 0.78);
+}
+
+.touch-btn__icon { font-size: 22px; line-height: 1; }
+.touch-btn__label { font-size: 11px; letter-spacing: 0.03em; }
+
+.hint, .help {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  border-radius: 10px;
+  background: rgba(255, 240, 205, 0.08);
+  color: #e7cfa5;
+}
+
+.hint {
+  border: 1px dashed #b99256;
+  color: #ffe1a3;
+}
+
+.help strong { color: #ffe1a3; }
