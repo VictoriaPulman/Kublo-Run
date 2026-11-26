@@ -17,9 +17,10 @@
      1. НАСТРОЙКИ И СЛУЖЕБНЫЕ ФУНКЦИИ
      ------------------------------------------------------------------ */
 
-  const LOGICAL_H = 420;          // Виртуальная высота поля (ширина считается от пропорций экрана)
-  const GROUND_Y = 358;           // Уровень земли в виртуальных координатах
-  const HERO_X = 112;             // Герой бежит на месте, мир движется мимо него
+  let H = 420;                    // Реальная высота поля в пикселях Canvas (без масштабирования)
+  let groundY = 336;              // Линия земли: пересчитывается при ресайзе/повороте экрана
+  let HERO_X = 112;               // Герой бежит на месте; в портрете сдвигается левее
+  let compactPortrait = false;    // Только вертикальный мобильный экран получает компактный мир
   const FACE_RATIO = 171 / 232;   // Точные пропорции исходных фотографий лица
   const GRAVITY = 0.62;           // Гравитация за один игровой кадр (1/60 с)
   const JUMP_V = -10.2;           // Начальная скорость прыжка
@@ -38,20 +39,48 @@
   const btnStart = document.getElementById('btnStart');
   const btnRestart = document.getElementById('btnRestart');
 
-  let W = 1000;       // Виртуальная ширина, пересчитывается при изменении размера окна
-  let scaleX = 1, scaleY = 1; // Масштаб виртуальных координат в реальные пиксели Canvas
+  let W = 1000;       // Ширина игрового поля в пикселях Canvas
+  let scaleX = 1, scaleY = 1; // Оставляем для совместимости с setTransform (теперь = 1)
 
-  // Адаптивный Canvas: рисуем в виртуальных координатах, но с учётом devicePixelRatio,
-  // чтобы картинка была чёткой на экранах с повышенной плотностью пикселей.
+  // Внутреннее разрешение СТРОГО равно отображаемому размеру холста.
+  // Десктоп и альбом сохраняют прежние пропорции; компактный мир — только в портрете.
   function resizeCanvas() {
     const rect = canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    canvas.width = Math.round(rect.width * dpr);
-    canvas.height = Math.round(rect.height * dpr);
-    W = Math.round(LOGICAL_H * rect.width / rect.height);
-    scaleX = canvas.width / W;
-    scaleY = canvas.height / LOGICAL_H;
+    const oldGroundY = groundY;
+
+    canvas.width = Math.floor(rect.width);
+    canvas.height = Math.floor(rect.height);
+    W = canvas.width;
+    H = canvas.height;
+    scaleX = 1;
+    scaleY = 1;
+
+    const mq = window.matchMedia;
+    compactPortrait = !!(mq && mq('(pointer: coarse) and (orientation: portrait)').matches);
+
+    if (compactPortrait) {
+      // Земля занимает нижние 45 пикселей компактного холста (высота задана в CSS).
+      groundY = canvas.height - 45;
+      // Герой стоит левее — игроку остаётся больше обзора впереди.
+      HERO_X = Math.min(70, canvas.width * 0.16);
+    } else {
+      // Прежняя логика десктопа / альбомного телефона — без изменений.
+      groundY = Math.floor(canvas.height * 0.72);
+      if (mq && mq('(orientation: landscape)').matches) groundY = Math.floor(canvas.height * 0.80);
+      HERO_X = 112;
+    }
+
+    const dy = groundY - oldGroundY;
+
+    // Все объекты хранят абсолютную координату по вертикали — переносим их вместе с землёй.
+    // hero.y остаётся смещением от groundY, поэтому герой привязывается автоматически.
+    if (dy) {
+      obstacles.forEach(o => { o.baseY += dy; });
+      artifacts.forEach(a => { a.y += dy; });
+      particles.forEach(p => { p.y += dy; });
+      dust.forEach(p => { p.y += dy; });
+    }
   }
 
   // Безопасная работа с localStorage (в приватном режиме доступ может быть запрещён)
@@ -241,6 +270,17 @@
   let nextSpawn = 420, shake = 0, overTimer = 0, lastMilestone = 0;
   let obstacles = [], artifacts = [], particles = [], dust = [];
 
+  // Фон: у каждого слоя жёстко задан период и собственный остаток смещения.
+  // offsetX никогда не обнуляется — переносится только целый период.
+  const BG_LAYER_W = 1200;
+  const bgLayers = {
+    // Дальние слои почти неподвижны относительно земли и препятствий
+    duneFar:  { width: BG_LAYER_W, offsetX: 0, speed: 0.06 },
+    duneNear: { width: BG_LAYER_W, offsetX: 0, speed: 0.06 },
+    ruins:    { width: BG_LAYER_W, offsetX: 0, speed: 0.12 },
+    ground:   { width: 140,        offsetX: 0, speed: 1.00 }
+  };
+
   const hero = {
     y: 0,          // Смещение по вертикали: 0 — на земле, отрицательное — в прыжке
     vy: 0,
@@ -252,9 +292,9 @@
     faceTimer: 0
   };
 
-  // Облака и звёзды создаём один раз, они движутся с разной скоростью (параллакс)
+  // Облака и звёзды создаём один раз; y облака хранится долей от groundY
   const clouds = Array.from({ length: 7 }, (_, i) => ({
-    x: i * 220 + rand(0, 100), y: rand(35, 130), s: rand(0.6, 1.3), a: rand(0.35, 0.75)
+    x: i * 220 + rand(0, 100), y: rand(0.18, 0.62), s: rand(0.6, 1.3), a: rand(0.35, 0.75)
   }));
   const stars = Array.from({ length: 90 }, () => ({
     x: Math.random(), y: Math.random() * 0.65, r: rand(0.5, 1.5), p: rand(0, 6.28)
@@ -299,7 +339,7 @@
         // Небольшое облачко пыли под сапогами и заметный наклон назад
         for (let i = 0; i < 5; i++) {
           dust.push({
-            x: HERO_X + rand(-4, 24), y: GROUND_Y + hero.y + 12,
+            x: HERO_X + rand(-4, 24), y: groundY + hero.y + 12,
             vx: rand(-2.2, -0.4), vy: rand(-0.8, 0.4), life: rand(14, 24), r: rand(2, 4)
           });
         }
@@ -439,11 +479,12 @@
 
     if (type === 'ptero') {
       // Только один уровень полёта: на уровне головы и верхней части туловища стоящего Кубло.
-      // Нижний край = GROUND_Y - 124. Стоя хитбокс пересекается гарантированно,
-      // а при пригибании (верх хитбокса GROUND_Y - 72) птица пролетает над головой с запасом.
+      // Нижний край = groundY - 124. Стоя хитбокс пересекается гарантированно,
+      // а при пригибании (верх хитбокса groundY - 72) птица пролетает над головой с запасом.
       const h = 38, w = 66;
-      const bottom = GROUND_Y - 124;
-      obstacles.push({ type, x: W + 60, w, h, baseY: bottom - h, phase: rand(0, 6.28) });
+      const bottom = groundY - 124;
+      const spawnX = compactPortrait ? canvas.width + 20 : W + 60;
+      obstacles.push({ type, x: spawnX, w, h, baseY: bottom - h, phase: rand(0, 6.28) });
     } else {
       const defs = {
         skeletonSmall: { w: 46, h: 38 },
@@ -452,14 +493,15 @@
         excavator:     { w: 142, h: 106 }
       };
       const d = defs[type];
-      obstacles.push({ type, x: W + 40, w: d.w, h: d.h, baseY: GROUND_Y - d.h, phase: rand(0, 6.28) });
+      const spawnX = compactPortrait ? canvas.width + 20 : W + 40;
+      obstacles.push({ type, x: spawnX, w: d.w, h: d.h, baseY: groundY - d.h, phase: rand(0, 6.28) });
     }
   }
 
   function spawnArtifact() {
     artifacts.push({
-      x: W + 30,
-      y: GROUND_Y - rand(105, 170),
+      x: compactPortrait ? canvas.width + 20 : W + 30,
+      y: groundY - rand(105, 170),
       phase: rand(0, 6.28),
       got: false
     });
@@ -468,7 +510,7 @@
   // Хитбокс героя: при пригибании высота уменьшается ровно вдвое (146 → 72),
   // поэтому под птицей среднего эшелона можно пробежать 100% безопасно.
   function heroBox() {
-    const feet = GROUND_Y + hero.y;
+    const feet = groundY + hero.y;
     if (hero.ducking && hero.y === 0) return { x: HERO_X + 2, y: feet - 72, w: 44, h: 72 };
     return { x: HERO_X + 8, y: feet - 148, w: 32, h: 146 };
   }
@@ -497,13 +539,9 @@
   function update() {
     gameTime += 16.6667;
 
-    // Фон движется даже на заставке и после проигрыша, но медленнее
-    const ambientSpeed = state === 'run' ? speed : 2;
-    scroll += ambientSpeed;
-    clouds.forEach(c => {
-      c.x -= ambientSpeed * 0.13;
-      if (c.x < -180) { c.x = W + rand(60, 260); c.y = rand(35, 130); }
-    });
+    // Скорость мира для совместимости; параллакс считается от скорости дорожки ниже.
+    const gameSpeed = state === 'run' ? speed : 2;
+    scroll += gameSpeed; // оставляем для совместимости с остальной логикой
 
     if (state === 'over') {
       overTimer += 16.6667;
@@ -530,7 +568,7 @@
     if (milestone > lastMilestone) {
       lastMilestone = milestone;
       sfx.milestone();
-      addFloatingText(`${milestone * 100} м!`, HERO_X + 60, GROUND_Y - 165, '#fff3b0');
+      addFloatingText(`${milestone * 100} м!`, HERO_X + 60, groundY - 165, '#fff3b0');
     }
 
     /* --- Физика прыжка: чем дольше зажата клавиша, тем выше прыжок --- */
@@ -564,6 +602,28 @@
       if (Math.random() < 0.34) spawnArtifact();
     }
 
+    // Песочная дорожка: та же формула и та же единица, что у скелетов и экскаваторов.
+    // Обновляется ровно один раз за кадр здесь и НИКАК не трогается в drawGround().
+    const groundLayer = bgLayers.ground;
+    groundLayer.offsetX -= speed;
+    if (groundLayer.offsetX <= -groundLayer.width) groundLayer.offsetX += groundLayer.width;
+
+    // Параллакс: доли от скорости дорожки/препятствий, без дополнительных dt.
+    // Каждый слой сдвигается ровно один раз и бесшовно переносится на свой период.
+    const ruinsLayer = bgLayers.ruins;
+    ruinsLayer.offsetX -= speed * 0.1; // домики и руины — в 10 раз медленнее дорожки
+    if (ruinsLayer.offsetX <= -ruinsLayer.width) ruinsLayer.offsetX += ruinsLayer.width;
+
+    [bgLayers.duneFar, bgLayers.duneNear].forEach(duneLayer => {
+      duneLayer.offsetX -= speed * 0.05; // барханы — в 20 раз медленнее дорожки
+      if (duneLayer.offsetX <= -duneLayer.width) duneLayer.offsetX += duneLayer.width;
+    });
+
+    clouds.forEach(c => {
+      c.x -= speed * 0.02; // облака едва заметно плывут по небу
+      if (c.x < -180) { c.x = canvas.width + rand(60, 260); c.y = rand(0.18, 0.62); }
+    });
+
     obstacles.forEach(o => { o.x -= speed; });
     artifacts.forEach(a => { a.x -= speed; });
     obstacles = obstacles.filter(o => o.x + o.w > -60);
@@ -594,7 +654,7 @@
 
     /* --- Пыль из-под сапог --- */
     if (hero.y === 0 && Math.random() < 0.35) {
-      dust.push({ x: HERO_X + rand(-6, 18), y: GROUND_Y - rand(0, 5), vx: -rand(1, 3), vy: -rand(0.2, 1.1), life: rand(14, 26), r: rand(1.5, 3.5) });
+      dust.push({ x: HERO_X + rand(-6, 18), y: groundY - rand(0, 5), vx: -rand(1, 3), vy: -rand(0.2, 1.1), life: rand(14, 26), r: rand(1.5, 3.5) });
     }
     dust.forEach(p => { p.x += p.vx; p.y += p.vy; p.life--; });
     dust = dust.filter(p => p.life > 0);
@@ -646,12 +706,25 @@
     ctx.restore();
   }
 
+  // Бесшовная tiling-отрисовка: копии паттерна идут строго встык через layerWidth.
+  // Число копий зависит от W, поэтому экран всегда перекрыт с запасом.
+  function drawTiledLayer(layer, drawTile) {
+    const start = Math.floor(layer.offsetX);
+    const copies = Math.ceil(W / layer.width) + 2;
+    for (let i = 0; i < copies; i++) {
+      ctx.save();
+      ctx.translate(start + i * layer.width, 0);
+      drawTile();
+      ctx.restore();
+    }
+  }
+
   function drawBackground(look) {
-    const sky = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+    const sky = ctx.createLinearGradient(0, 0, 0, groundY);
     sky.addColorStop(0, look.top);
     sky.addColorStop(1, look.bottom);
     ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, W, GROUND_Y);
+    ctx.fillRect(0, 0, W, groundY);
 
     // Звёзды проявляются только ночью
     if (look.night > 0.02) {
@@ -659,13 +732,14 @@
         const a = look.night * (0.45 + 0.55 * Math.sin(gameTime / 420 + s.p));
         ctx.fillStyle = `rgba(255,255,255,${clamp(a, 0, 1)})`;
         ctx.beginPath();
-        ctx.arc(s.x * W, s.y * GROUND_Y, s.r, 0, 6.283);
+        ctx.arc(s.x * W, s.y * groundY, s.r, 0, 6.283);
         ctx.fill();
       });
     }
 
     // Солнце / луна: днём высоко, на закате у горизонта
-    const sx = W * 0.79, sy = look.sunY;
+    const sx = canvas.width * 0.79;
+    const sy = groundY * (look.sunY / 358); // палитра задана относительно старой земли 358
     const glow = ctx.createRadialGradient(sx, sy, 2, sx, sy, 78);
     glow.addColorStop(0, withAlpha(look.sun, 0.55));
     glow.addColorStop(1, withAlpha(look.sun, 0));
@@ -681,75 +755,134 @@
 
     // Облака плывут медленнее земли (параллакс)
     clouds.forEach(c => {
-      const x = ((c.x % (W + 300)) + W + 300) % (W + 300) - 120;
+      const period = W + 300;
+      const x = ((c.x % period) + period) % period - 120;
+      const cy = c.y * (compactPortrait ? groundY : 358); // в портрете — к реальному небу
       ctx.fillStyle = `rgba(255,255,255,${c.a * (1 - look.night * 0.55)})`;
       ctx.beginPath();
-      ctx.ellipse(x, c.y, 42 * c.s, 13 * c.s, 0, 0, 6.283);
-      ctx.ellipse(x + 27 * c.s, c.y - 7 * c.s, 30 * c.s, 15 * c.s, 0, 0, 6.283);
-      ctx.ellipse(x - 27 * c.s, c.y + 2 * c.s, 25 * c.s, 11 * c.s, 0, 0, 6.283);
+      ctx.ellipse(x, cy, 42 * c.s, 13 * c.s, 0, 0, 6.283);
+      ctx.ellipse(x + 27 * c.s, cy - 7 * c.s, 30 * c.s, 15 * c.s, 0, 0, 6.283);
+      ctx.ellipse(x - 27 * c.s, cy + 2 * c.s, 25 * c.s, 11 * c.s, 0, 0, 6.283);
       ctx.fill();
     });
 
-    // Две полосы барханов с разной скоростью смещения
-    function duneLayer(offset, color, base, amp, freq) {
-      ctx.beginPath();
-      ctx.moveTo(0, GROUND_Y);
-      for (let x = 0; x <= W + 12; x += 12) {
-        const y = base + Math.sin((x + offset) / freq) * amp + Math.sin((x + offset) / (freq * 0.41)) * amp * 0.3;
-        ctx.lineTo(x, y);
-      }
-      ctx.lineTo(W, GROUND_Y);
-      ctx.closePath();
-      ctx.fillStyle = color;
-      ctx.fill();
+    // Барханы: синусоида с целыми гармониками, поэтому x=0 и x=layerWidth совпадают.
+    function makeDuneTile(color, base, amp, phase) {
+      return function drawDuneTile() {
+        ctx.beginPath();
+        ctx.moveTo(0, groundY);
+        let y = base;
+        for (let x = 0; x <= BG_LAYER_W; x += 12) {
+          const t = (x / BG_LAYER_W) * Math.PI * 2 + phase;
+          y = base + Math.sin(t) * amp + Math.sin(t * 2) * amp * 0.3;
+          ctx.lineTo(x, y);
+        }
+        ctx.lineTo(BG_LAYER_W, groundY);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+      };
     }
-    duneLayer(scroll * 0.18, look.duneFar, GROUND_Y - 96, 30, 130);
-    duneLayer(scroll * 0.38, look.duneNear, GROUND_Y - 48, 22, 92);
+    drawTiledLayer(bgLayers.duneFar, makeDuneTile(look.duneFar, groundY - 96, 30, 0));
+    drawTiledLayer(bgLayers.duneNear, makeDuneTile(look.duneNear, groundY - 48, 22, 1.1));
 
-    // Силуэты древних руин на среднем плане
-    const period = 430;
-    const shift = (scroll * 0.45) % period;
-    for (let i = -1; i < Math.ceil(W / period) + 1; i++) {
-      const x = i * period - shift + (i % 2 ? 90 : 0);
-      const y = GROUND_Y - 52;
-      ctx.fillStyle = look.ruin;
-      ctx.fillRect(x, y - 44, 14, 44);
-      ctx.fillRect(x + 30, y - 62, 14, 62);
-      ctx.fillRect(x + 60, y - 44, 14, 44);
-      ctx.fillRect(x - 4, y - 70, 92, 9);              // перекрытие колонн
-      ctx.beginPath();                                 // фронтон «храма»
-      ctx.moveTo(x - 8, y - 70); ctx.lineTo(x + 44, y - 94); ctx.lineTo(x + 96, y - 70);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = 'rgba(0,0,0,0.12)';
-      ctx.fillRect(x, y - 2, 92, 4);
+    // Руины: один и тот же набор построек внутри периода, без «шага» на стыке.
+    function drawRuinTile() {
+      const y = groundY - 52;
+      [[110, 1], [500, 0.82], [900, 1.12]].forEach(([px, s]) => {
+        ctx.save();
+        ctx.translate(px, y);
+        ctx.scale(s, s);
+        ctx.fillStyle = look.ruin;
+        ctx.fillRect(0, -44, 14, 44);
+        ctx.fillRect(30, -62, 14, 62);
+        ctx.fillRect(60, -44, 14, 44);
+        ctx.fillRect(-4, -70, 92, 9);                // перекрытие колонн
+        ctx.beginPath();                             // фронтон «храма»
+        ctx.moveTo(-8, -70); ctx.lineTo(44, -94); ctx.lineTo(96, -70);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        ctx.fillRect(0, -2, 92, 4);
+        ctx.restore();
+      });
     }
+    drawTiledLayer(bgLayers.ruins, drawRuinTile);
   }
 
   function drawGround(look) {
+    // Заливаем грунт от линии горизонта до САМОГО низа холста с запасом — синего «хвоста» не остаётся
     ctx.fillStyle = look.ground;
-    ctx.fillRect(0, GROUND_Y, W, LOGICAL_H - GROUND_Y);
-    ctx.fillStyle = look.line;
-    ctx.fillRect(0, GROUND_Y, W, 3);
+    ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY + 50);
 
-    // Песок, камешки и следы раскопок — повторяющаяся текстура, движущаяся вместе с землёй
-    const tile = 140;
-    for (let i = -1; i < Math.ceil(W / tile) + 1; i++) {
-      const base = i * tile - (scroll % tile);
+    // Археологический срез почвы: прослойки, камешки, косточки и окаменелости
+    const soilDepth = canvas.height - groundY;
+    if (soilDepth > 16) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, groundY + 3, W, soilDepth - 3);
+      ctx.clip();
+
+      function drawSoilTile() {
+        const d = canvas.height - groundY;
+        const tile = bgLayers.ground.width;
+
+        // Тёмные и светлые прослойки идут через весь тайл — стык остаётся незаметным
+        ctx.fillStyle = 'rgba(70,45,22,0.11)';
+        ctx.fillRect(0, groundY + d * 0.18, tile, Math.max(4, d * 0.08));
+        ctx.fillStyle = 'rgba(255,235,190,0.06)';
+        ctx.fillRect(0, groundY + d * 0.42, tile, Math.max(3, d * 0.05));
+        ctx.fillStyle = 'rgba(55,35,18,0.14)';
+        ctx.fillRect(0, groundY + d * 0.70, tile, Math.max(5, d * 0.09));
+
+        // Мелкие камешки в толще грунта
+        ctx.fillStyle = 'rgba(74,50,28,0.22)';
+        [[18, 0.28, 3], [62, 0.36, 2], [118, 0.60, 4], [42, 0.82, 2.5], [96, 0.90, 3]].forEach(([px, py, r]) => {
+          ctx.beginPath();
+          ctx.ellipse(px, groundY + d * py, r, r * 0.6, 0, 0, 6.283);
+          ctx.fill();
+        });
+
+        // Небольшая косточка
+        ctx.strokeStyle = 'rgba(245,230,200,0.30)';
+        ctx.fillStyle = 'rgba(245,230,200,0.34)';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        const bx = 30, by = groundY + d * 0.55;
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + 16, by + 5); ctx.stroke();
+        [[bx, by], [bx + 16, by + 5]].forEach(([x, y]) => {
+          ctx.beginPath(); ctx.arc(x, y, 2.6, 0, 6.283); ctx.fill();
+        });
+
+        // Отпечаток аммонита
+        ctx.strokeStyle = 'rgba(245,230,200,0.22)';
+        ctx.beginPath(); ctx.arc(104, groundY + d * 0.80, Math.max(6, d * 0.09), 0.2, 5.9); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(96, groundY + d * 0.84); ctx.lineTo(112, groundY + d * 0.76); ctx.stroke();
+      }
+      drawTiledLayer(bgLayers.ground, drawSoilTile);
+      ctx.restore();
+    }
+
+    ctx.fillStyle = look.line;
+    ctx.fillRect(0, groundY, W, 3);
+
+    // Песок, камешки и следы раскопок — тот же паттерн в каждом тайле, стык без разрыва
+    function drawGroundTile() {
       ctx.fillStyle = 'rgba(90,60,30,0.13)';
       for (let j = 0; j < 3; j++) {
-        const px = base + 18 + j * 46;
-        const py = GROUND_Y + 12 + (j * 17) % 44;
+        const px = 18 + j * 46;
+        const py = groundY + 12 + (j * 17) % 44;
         ctx.beginPath(); ctx.ellipse(px, py, 3 + j, 1.6, 0, 0, 6.283); ctx.fill();
       }
       ctx.strokeStyle = 'rgba(80,55,28,0.16)';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(base + 78, GROUND_Y + 20); ctx.lineTo(base + 92, GROUND_Y + 30);
-      ctx.moveTo(base + 92, GROUND_Y + 20); ctx.lineTo(base + 78, GROUND_Y + 30);
+      ctx.moveTo(78, groundY + 20); ctx.lineTo(92, groundY + 30);
+      ctx.moveTo(92, groundY + 20); ctx.lineTo(78, groundY + 30);
       ctx.stroke();
       ctx.fillStyle = 'rgba(255,240,200,0.14)';
-      ctx.fillRect(base + 30, GROUND_Y + 43, 38, 2);
+      ctx.fillRect(30, groundY + 43, 38, 2);
     }
+    drawTiledLayer(bgLayers.ground, drawGroundTile);
 
     // Пыль из-под сапог
     dust.forEach(p => {
@@ -760,7 +893,7 @@
 
   function drawHero() {
     const airborne = hero.y < 0;
-    const feet = GROUND_Y + hero.y;
+    const feet = groundY + hero.y;
     const duck = hero.ducking && !airborne;
     const phase = gameTime * Math.PI / FACE_FRAME_MS; // один шаг = пол цикла смены кадра
     const swing = airborne ? 3 : Math.sin(phase) * 9;
@@ -1236,18 +1369,55 @@
   }
 
   function drawHUD(look) {
+    const c = compactPortrait;
+    const left = c ? 10 : 18;
+    const top = c ? 20 : 34;
     ctx.textAlign = 'left';
     ctx.fillStyle = look.text;
-    ctx.font = 'bold 22px "Trebuchet MS", sans-serif';
-    ctx.fillText(`${String(Math.floor(score)).padStart(5, '0')} м`, 18, 34);
+    ctx.font = `bold ${c ? 15 : 22}px "Trebuchet MS", sans-serif`;
+    ctx.fillText(`${String(Math.floor(score)).padStart(5, '0')} м`, left, top);
     ctx.textAlign = 'right';
-    ctx.font = 'bold 18px "Trebuchet MS", sans-serif';
-    ctx.fillText(`HI ${String(hi).padStart(5, '0')}`, W - 18, 34);
+    ctx.font = `bold ${c ? 13 : 18}px "Trebuchet MS", sans-serif`;
+    ctx.fillText(`HI ${String(hi).padStart(5, '0')}`, canvas.width - (c ? 20 : 18), top);
     ctx.textAlign = 'left';
   }
 
   function drawStartScreen() {
-    // Полупрозрачная «табличка» с заголовком и крупным портретом в центре
+    // Компактный портретный холст: табличка целиком помещается в 230 px высоты
+    if (compactPortrait) {
+      const pw = W - 16, ph = H - 12, px = 8, py = 6;
+      ctx.fillStyle = 'rgba(255,244,215,0.92)';
+      roundedRectPath(ctx, px, py, pw, ph, 12); ctx.fill();
+      ctx.strokeStyle = '#8a6537';
+      ctx.lineWidth = 3;
+      roundedRectPath(ctx, px, py, pw, ph, 12); ctx.stroke();
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#4a3019';
+      ctx.font = 'bold 22px "Trebuchet MS", sans-serif';
+      ctx.fillText('KUBLO RUN', W / 2, py + 26);
+      ctx.font = '10px "Trebuchet MS", sans-serif';
+      ctx.fillStyle = '#8a6537';
+      ctx.fillText('Бегущий Кубло · раскопки без передышки', W / 2, py + 42);
+
+      const portraitH = 84;
+      const portraitW = portraitH * FACE_RATIO;
+      drawFace(hero.faceFrame, W / 2, py + 94, portraitW, portraitH,
+        Math.sin(hero.faceTimer / 430 * Math.PI) * 0.04);
+
+      ctx.fillStyle = '#4a3019';
+      ctx.font = 'bold 12px "Trebuchet MS", sans-serif';
+      ctx.fillText('ПРОБЕЛ / ↑ / ТАП — НАЧАТЬ ЗАБЕГ', W / 2, py + 150);
+      ctx.font = '10px "Trebuchet MS", sans-serif';
+      ctx.fillStyle = '#7a5631';
+      ctx.fillText(`Рекорд: ${hi} м · Забегов: ${runs} · ${rankFor(hi)}`, W / 2, py + 172);
+      ctx.font = '9px "Trebuchet MS", sans-serif';
+      ctx.fillText('↓ / S или удержание справа — пригнуться', W / 2, py + 194);
+      ctx.textAlign = 'left';
+      return;
+    }
+
+    // Десктоп / альбом: прежняя «табличка» с заголовком и крупным портретом
     const pw = Math.min(W - 36, 660), ph = 382;
     const px = (W - pw) / 2, py = 18;
     ctx.fillStyle = 'rgba(255,244,215,0.90)';
@@ -1282,10 +1452,46 @@
 
   function drawGameOver() {
     ctx.fillStyle = 'rgba(24,16,10,0.60)';
-    ctx.fillRect(0, 0, W, LOGICAL_H);
+    ctx.fillRect(0, 0, W, H);
+
+    if (compactPortrait) {
+      const bw = W - 16, bh = 150, bx = 8, by = (H - bh) / 2;
+      ctx.fillStyle = '#8b5c30';
+      roundedRectPath(ctx, bx + 4, by + 5, bw, bh, 10); ctx.fill();
+      ctx.fillStyle = '#d8ac6b';
+      roundedRectPath(ctx, bx, by, bw, bh, 10); ctx.fill();
+      ctx.strokeStyle = '#5b3a1c';
+      ctx.lineWidth = 3;
+      roundedRectPath(ctx, bx, by, bw, bh, 10); ctx.stroke();
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#4a2c15';
+      ctx.font = 'bold 17px "Trebuchet MS", sans-serif';
+      ctx.fillText('Раскоп остановлен!', W / 2, by + 27);
+      ctx.font = 'bold 12px "Trebuchet MS", sans-serif';
+      ctx.fillText(`Дистанция: ${Math.floor(score)} м · HI: ${hi} м`, W / 2, by + 52);
+      ctx.font = '10px "Trebuchet MS", sans-serif';
+      ctx.fillStyle = '#6b4727';
+      ctx.fillText(`Забегов: ${runs} · ${rankFor(hi)}`, W / 2, by + 74);
+
+      const pulse = 1 + Math.sin(gameTime / 220) * 0.02;
+      ctx.save();
+      ctx.translate(W / 2, by + 116);
+      ctx.scale(pulse, pulse);
+      ctx.fillStyle = '#4e8150';
+      roundedRectPath(ctx, -90, -17, 180, 34, 8); ctx.fill();
+      ctx.strokeStyle = '#2d502f'; ctx.lineWidth = 2;
+      roundedRectPath(ctx, -90, -17, 180, 34, 8); ctx.stroke();
+      ctx.fillStyle = '#fff6df';
+      ctx.font = 'bold 13px "Trebuchet MS", sans-serif';
+      ctx.fillText('Бежать снова', 0, 5);
+      ctx.restore();
+      ctx.textAlign = 'left';
+      return;
+    }
 
     const bw = Math.min(480, W - 30), bh = 216;
-    const bx = (W - bw) / 2, by = (LOGICAL_H - bh) / 2 - 8;
+    const bx = (W - bw) / 2, by = (H - bh) / 2 - 8;
     ctx.fillStyle = '#8b5c30';
     roundedRectPath(ctx, bx + 5, by + 7, bw, bh, 14); ctx.fill();
     ctx.fillStyle = '#d8ac6b';
@@ -1322,7 +1528,7 @@
 
   function render() {
     ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
-    ctx.clearRect(0, 0, W, LOGICAL_H);
+    ctx.clearRect(0, 0, W, H);
 
     const look = currentLook();
     drawBackground(look);

@@ -212,51 +212,121 @@ body {
 .help strong { color: #ffe1a3; }
 
 /* ============================================================
-   Полноэкранный режим — СТРОГО для перевёрнутого мобильного экрана.
-   На ПК и в портретной ориентации остаётся компактная карточка игры.
+   Мобильная версия. Компьютерная версия выше не затрагивается.
    ============================================================ */
-@media (pointer: coarse) and (orientation: landscape) and (max-height: 550px) {
+
+/* Портретный экран: шапка → игра → правила → пустота → кнопки снизу */
+@media (pointer: coarse) and (orientation: portrait) {
+  /* Жёсткий вертикальный поток: пустота образуется только за счёт margin-top:auto */
   html, body {
-    height: 100vh;   /* fallback для старых браузеров */
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    box-sizing: border-box;
+    margin: 0;
+  }
+  body {
+    padding: 0;
+    background-color: #2b2018; /* цвет гибкой пустоты между правилами и кнопками */
+  }
+
+  /* Главный контейнер — тот же вертикальный поток на всю высоту экрана */
+  .game-shell {
+    width: 100%;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    box-sizing: border-box;
+    padding: 7px 7px 0;
+  }
+
+  /* 1. Шапка */
+  .topbar { order: 1; flex: none; }
+
+  /* 2. Игровой экран */
+  .game-wrap { order: 2; width: 100%; flex: none; }
+  #game {
+    display: block;
+    width: 100%;
+    height: 230px;
+    aspect-ratio: auto;
+  }
+
+  /* 3. Текст пояснений управления */
+  .help, .hint { order: 3; }
+  .help {
+    display: block !important;
+    margin: 10px 0 0;
+    padding: 6px 10px;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .hint {
+    margin: 10px 0 0;
+    padding: 4px 8px;
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  /* 4. Кнопки прижаты к нижнему краю; всё свободное место выше — фон страницы */
+  .touch-controls {
+    order: 4;
+    display: flex;
+    margin-top: auto;
+    width: 100%;
+    box-sizing: border-box;
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  .touch-btn { height: 58px; }
+}
+
+/* Альбомный экран: жёстко без прокрутки, Canvas ровно в границах окна */
+@media (pointer: coarse) and (orientation: landscape) {
+  html, body {
     height: 100dvh;
+    max-height: 100dvh;
     overflow: hidden;
     margin: 0;
     padding: 0;
   }
 
-  /* Шапка с длинным заголовком и текстовые инструкции не нужны в альбоме */
   .topbar, .help, .hint { display: none !important; }
 
+  .game-shell,
+  .game-wrap,
+  #game {
+    position: fixed;
+    inset: 0;
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    object-fit: contain;
+  }
+
   .game-shell {
-    width: 100%;
-    max-width: none;
-    height: 100vh;
-    height: 100dvh;
     padding: 0;
     gap: 0;
     justify-content: stretch;
   }
   .game-wrap {
-    width: 100vw;
-    height: 100dvh;
-    flex: 1 1 auto;
     border: 0;
     border-radius: 0;
     box-shadow: none;
   }
-  #game {
-    width: 100vw;
-    height: 100dvh;
-    aspect-ratio: auto;
-  }
+  #game { display: block; }
 
-  /* Полупрозрачные кнопки в левом и правом нижних углах поверх «земли» Canvas */
+  /* Кнопки в нижних углах поверх «земли» Canvas */
   .touch-controls {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 12px;
-    z-index: 60;
+    z-index: 50;
     padding: 0 12px env(safe-area-inset-bottom);
     gap: 12px;
   }
