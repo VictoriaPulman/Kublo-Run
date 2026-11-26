@@ -211,38 +211,54 @@ body {
 
 .help strong { color: #ffe1a3; }
 
-/* Альбомный режим: шапка и инструкции скрыты, поле — почти на весь экран */
-@media (orientation: landscape) and (max-height: 550px) {
-  body { padding: 0; align-items: center; }
+/* ============================================================
+   Полноэкранный режим — СТРОГО для перевёрнутого мобильного экрана.
+   На ПК и в портретной ориентации остаётся компактная карточка игры.
+   ============================================================ */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 550px) {
+  html, body {
+    height: 100vh;   /* fallback для старых браузеров */
+    height: 100dvh;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Шапка с длинным заголовком и текстовые инструкции не нужны в альбоме */
   .topbar, .help, .hint { display: none !important; }
+
   .game-shell {
     width: 100%;
     max-width: none;
     height: 100vh;
+    height: 100dvh;
+    padding: 0;
     gap: 0;
-    justify-content: center;
+    justify-content: stretch;
   }
   .game-wrap {
     width: 100vw;
-    height: 100vh;
+    height: 100dvh;
+    flex: 1 1 auto;
     border: 0;
     border-radius: 0;
     box-shadow: none;
   }
   #game {
     width: 100vw;
-    height: 100vh;
+    height: 100dvh;
     aspect-ratio: auto;
   }
-  /* Кнопки аккуратно по нижним углам экрана, не перекрывают центр поля */
+
+  /* Полупрозрачные кнопки в левом и правом нижних углах поверх «земли» Canvas */
   .touch-controls {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 8px;
+    bottom: 12px;
     z-index: 60;
-    padding: 0 12px;
+    padding: 0 12px env(safe-area-inset-bottom);
     gap: 12px;
   }
-  .touch-btn { max-width: 140px; height: min(62px, 18vh); opacity: 0.88; }
+  .touch-btn { max-width: 140px; height: min(58px, 20vh); opacity: 0.85; }
 }

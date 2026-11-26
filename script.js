@@ -337,6 +337,9 @@
   // Пока открыты «Старт» или Game Over, Canvas НЕ перехватывает касания:
   // их обрабатывает прозрачный слой с кнопкой поверх Canvas.
   canvas.addEventListener('touchstart', e => {
+    // Если палец попал на любую HTML-кнопку — не трогаем событие,
+    // иначе браузер не сгенерирует обычный click по «Старт» / «Бежать снова».
+    if (e.target.closest('button')) return;
     if (state !== 'run') return;
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
@@ -344,6 +347,7 @@
     if (x < rect.width / 2) pressJump(); else pressDuck();
   }, { passive: false });
   canvas.addEventListener('touchend', e => {
+    if (e.target.closest('button')) return;
     if (state !== 'run') return;
     e.preventDefault();
     releaseJump(); releaseDuck();
@@ -366,6 +370,8 @@
   // «Старт» и «Бежать снова»: мгновенный отклик на touchend/click без системной задержки
   let lastModalTouchEnd = -Infinity;
   function modalRestart(e) {
+    // Полностью изолируем кнопку от игровых обработчиков касаний/кликов.
+    e.stopPropagation();
     const now = performance.now();
     if (e.type === 'touchend') {
       e.preventDefault();
@@ -385,6 +391,7 @@
 
   // Клик по полю мышью (тач обработан выше)
   canvas.addEventListener('pointerdown', e => {
+    if (e.target.closest('button')) return;
     if (e.pointerType === 'touch') return;
     if (state !== 'run') pressJump();
   });
