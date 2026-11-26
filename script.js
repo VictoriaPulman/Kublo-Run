@@ -33,6 +33,10 @@
   const soundBtn = document.getElementById('soundToggle');
   const btnJump = document.getElementById('btnJump');
   const btnDuck = document.getElementById('btnDuck');
+  const touchControls = document.getElementById('touchControls');
+  const modalLayer = document.getElementById('modalLayer');
+  const btnStart = document.getElementById('btnStart');
+  const btnRestart = document.getElementById('btnRestart');
 
   let W = 1000;       // Виртуальная ширина, пересчитывается при изменении размера окна
   let scaleX = 1, scaleY = 1; // Масштаб виртуальных координат в реальные пиксели Canvas
@@ -256,6 +260,17 @@
     x: Math.random(), y: Math.random() * 0.65, r: rand(0.5, 1.5), p: rand(0, 6.28)
   }));
 
+  // Синхронизация DOM-слоёв: модальные кнопки поверх Canvas и мобильные кнопки под полем
+  function syncUI() {
+    const modalOpen = state !== 'run';
+    modalLayer.hidden = !modalOpen;
+    btnStart.hidden = state !== 'start';
+    btnRestart.hidden = state !== 'over';
+    // Пока открыт «Старт» или «Раскоп остановлен!», игровые кнопки недоступны
+    touchControls.classList.toggle('is-blocked', modalOpen);
+    canvas.style.cursor = modalOpen ? 'pointer' : 'default';
+  }
+
   function resetGame() {
     score = 0; speed = 6; scroll = 0;
     obstacles = []; artifacts = []; particles = []; dust = [];
@@ -263,6 +278,7 @@
     hero.y = 0; hero.vy = 0; hero.jumpHeld = false; hero.holdTime = 0; hero.jumpCount = 0;
     hero.ducking = false; hero.faceFrame = 0; hero.faceTimer = 0;
     state = 'run';
+    syncUI();
   }
 
   function pressJump() {
@@ -317,22 +333,29 @@
   // Полностью отключаем контекстное меню: долгое нажатие на телефоне не должно мешать игре
   document.getElementById('gameWrap').addEventListener('contextmenu', e => e.preventDefault());
 
-  // Тач по полю: левая половина — прыжок, правая — пригнуться (в том числе свайп вниз)
+  // Тач по полю: левая половина — прыжок, правая — пригнуться (в том числе свайп вниз).
+  // Пока открыты «Старт» или Game Over, Canvas НЕ перехватывает касания:
+  // их обрабатывает прозрачный слой с кнопкой поверх Canvas.
   canvas.addEventListener('touchstart', e => {
+    if (state !== 'run') return;
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     const x = e.touches[0].clientX - rect.left;
     if (x < rect.width / 2) pressJump(); else pressDuck();
   }, { passive: false });
   canvas.addEventListener('touchend', e => {
+    if (state !== 'run') return;
     e.preventDefault();
     releaseJump(); releaseDuck();
   }, { passive: false });
   canvas.addEventListener('touchcancel', () => { releaseJump(); releaseDuck(); });
 
-  // Экранные кнопки работают и мышью, и пальцем
+  // Экранные кнопки работают и мышью, и пальцем; во время модалки заблокированы
   function bindTouchButton(el, onDown, onUp) {
-    el.addEventListener('pointerdown', e => { e.preventDefault(); el.classList.add('is-pressed'); onDown(); });
+    el.addEventListener('pointerdown', e => {
+      if (state !== 'run') return;
+      e.preventDefault(); el.classList.add('is-pressed'); onDown();
+    });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
       el.addEventListener(type, e => { e.preventDefault(); el.classList.remove('is-pressed'); onUp(); });
     });
@@ -340,9 +363,29 @@
   bindTouchButton(btnJump, pressJump, releaseJump);
   bindTouchButton(btnDuck, pressDuck, releaseDuck);
 
-  // Клик по полю (для мыши и тапа, если браузер не прислал touch-событие)
+  // «Старт» и «Бежать снова»: мгновенный отклик на touchend/click без системной задержки
+  let lastModalTouchEnd = -Infinity;
+  function modalRestart(e) {
+    const now = performance.now();
+    if (e.type === 'touchend') {
+      e.preventDefault();
+      lastModalTouchEnd = now; // реагируем сразу на отпускание пальца
+    } else if (now - lastModalTouchEnd < 400) {
+      return; // игнорируем дублирующий click, который браузер посылает после touchend
+    }
+    if (state === 'start' || state === 'over') {
+      ensureAudio();
+      resetGame(); // перезапуск сразу, без игрового кулдауна
+    }
+  }
+  [btnStart, btnRestart].forEach(btn => {
+    btn.addEventListener('touchend', modalRestart, { passive: false });
+    btn.addEventListener('click', modalRestart);
+  });
+
+  // Клик по полю мышью (тач обработан выше)
   canvas.addEventListener('pointerdown', e => {
-    if (e.pointerType === 'touch') return; // тач уже обработан выше
+    if (e.pointerType === 'touch') return;
     if (state !== 'run') pressJump();
   });
 
@@ -436,6 +479,7 @@
     storeSet('kublo_runs', runs);
     if (score > hi) { hi = Math.floor(score); storeSet('kublo_hi', hi); }
     sfx.crash();
+    syncUI();
   }
 
   function addFloatingText(text, x, y, color) {
@@ -1311,7 +1355,18 @@
   }
 
   resizeCanvas();
+  syncUI(); // стартовая заставка: кнопка «Старт» поверх Canvas, игровые кнопки скрыты
+
+  // Обычный ресайз и поворот смартфона: пересчитываем виртуальную ширину и масштаб,
+  // чтобы пропорции героя и препятствий не искажались в альбомном режиме.
   window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('orientationchange', () => {
+    resizeCanvas();
+    // Некоторые мобильные браузеры меняют размеры асинхронно — уточняем на следующем кадре
+    requestAnimationFrame(resizeCanvas);
+    setTimeout(resizeCanvas, 250);
+  });
+
   loadFaces();
   requestAnimationFrame(loop);
 })();

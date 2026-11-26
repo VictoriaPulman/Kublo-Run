@@ -20,15 +20,28 @@
       <!-- Игровое поле целиком отрисовывается средствами HTML5 Canvas -->
       <canvas id="game" aria-label="Игра Kublo Run: бесконечный раннер с археологом Кубло"></canvas>
 
-      <!-- Полупрозрачные экранные кнопки для сенсорных устройств -->
-      <div class="touch-controls" aria-hidden="false">
-        <button id="btnJump" class="touch-btn touch-btn--jump" type="button">
-          <span class="touch-btn__icon">⬆️</span><span class="touch-btn__label">Прыжок</span>
-        </button>
-        <button id="btnDuck" class="touch-btn touch-btn--duck" type="button">
-          <span class="touch-btn__icon">⬇️</span><span class="touch-btn__label">Пригнуться</span>
-        </button>
+      <!-- Прозрачный слой поверх Canvas: ловит тапы по «Старт» и «Бежать снова»
+           и не даёт им перехватываться логикой прыжка. -->
+      <div id="modalLayer" class="modal-layer" hidden>
+        <button id="btnStart" class="modal-hit" type="button" aria-label="Начать забег"></button>
+        <button id="btnRestart" class="modal-hit" type="button" aria-label="Бежать снова" hidden></button>
       </div>
+    </div>
+
+    <!-- Крупные кнопки для больших пальцев: строго ПОД игровым полем -->
+    <div id="touchControls" class="touch-controls">
+      <button id="btnJump" class="touch-btn touch-btn--jump" type="button">
+        <svg class="touch-btn__icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 15l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="touch-btn__label">Прыжок</span>
+      </button>
+      <button id="btnDuck" class="touch-btn touch-btn--duck" type="button">
+        <svg class="touch-btn__icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 9l7 7 7-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="touch-btn__label">Пригнуться</span>
+      </button>
     </div>
 
     <!-- Подсказка появляется только если не найдены оба файла с лицом героя -->
